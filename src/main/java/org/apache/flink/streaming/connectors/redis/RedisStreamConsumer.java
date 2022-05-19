@@ -18,16 +18,19 @@
 package org.apache.flink.streaming.connectors.redis;
 
 import org.apache.flink.streaming.connectors.redis.config.StartupMode;
-
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.StreamEntry;
 import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.params.XReadParams;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Properties;
 
-/** @param <T> */
+/**
+ * @param <T>
+ */
 public class RedisStreamConsumer<T> extends AbstractRedisStreamConsumer<T> {
 
     private final DataConverter<T> dataConverter;
@@ -36,24 +39,23 @@ public class RedisStreamConsumer<T> extends AbstractRedisStreamConsumer<T> {
             Properties configProps,
             StartupMode startupMode,
             DataConverter<T> dataConverter,
-            String... streamKeys) {
+            String streamKey) {
+        this(configProps, startupMode, dataConverter, Arrays.asList(streamKey));
+    }
+
+    public RedisStreamConsumer(
+            Properties configProps,
+            StartupMode startupMode,
+            DataConverter<T> dataConverter,
+            List<String> streamKeys) {
         super(startupMode, streamKeys, configProps);
         this.dataConverter = dataConverter;
     }
 
     public RedisStreamConsumer(
             DataConverter<T> dataConverter,
-            String[] streamKeys,
-            Long[] timestamps,
-            Properties configProps) {
-        super(streamKeys, timestamps, configProps);
-        this.dataConverter = dataConverter;
-    }
-
-    public RedisStreamConsumer(
-            DataConverter<T> dataConverter,
-            String[] streamKeys,
-            StreamEntryID[] streamIds,
+            List<String> streamKeys,
+            List<StreamEntryID> streamIds,
             Properties configProps) {
         super(streamKeys, streamIds, configProps);
         this.dataConverter = dataConverter;
@@ -61,7 +63,8 @@ public class RedisStreamConsumer<T> extends AbstractRedisStreamConsumer<T> {
 
     @Override
     protected List<Entry<String, List<StreamEntry>>> read(Jedis jedis) {
-        return jedis.xread(1, 0L, streamEntryIds);
+        // return jedis.xread(XReadParams.xReadParams().count(1).block(0), streamEntryIds);
+        return jedis.xread(XReadParams.xReadParams().count(1), streamEntryIds);
     }
 
     @Override

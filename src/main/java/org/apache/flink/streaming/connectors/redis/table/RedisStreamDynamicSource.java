@@ -28,9 +28,9 @@ import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.SourceFunctionProvider;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Preconditions;
-
 import redis.clients.jedis.StreamEntryID;
 
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -291,16 +291,17 @@ public class RedisStreamDynamicSource implements ScanTableSource {
                             groupName.get(),
                             consumerName.get(),
                             converter,
-                            new String[] {streamKey},
-                            new Long[] {timestamp},
+                            Arrays.asList(streamKey),
+                            RedisStreamGroupConsumer.convertToStreamEntryIDs(
+                                    Arrays.asList(timestamp)),
                             config);
                 case SPECIFIC_OFFSETS:
                     return new RedisStreamGroupConsumer<>(
                             groupName.get(),
                             consumerName.get(),
                             converter,
-                            new String[] {streamKey},
-                            new StreamEntryID[] {streamEntryId},
+                            Arrays.asList(streamKey),
+                            Arrays.asList(streamEntryId),
                             config);
                 default:
                     return new RedisStreamGroupConsumer<>(
@@ -308,19 +309,23 @@ public class RedisStreamDynamicSource implements ScanTableSource {
                             consumerName.get(),
                             startupMode,
                             converter,
-                            new String[] {streamKey},
+                            Arrays.asList(streamKey),
                             config);
             }
         } else {
             switch (startupMode) {
                 case TIMESTAMP:
                     return new RedisStreamConsumer<>(
-                            converter, new String[] {streamKey}, new Long[] {timestamp}, config);
+                            converter,
+                            Arrays.asList(streamKey),
+                            AbstractRedisStreamConsumer.convertToStreamEntryIDs(
+                                    Arrays.asList(timestamp)),
+                            config);
                 case SPECIFIC_OFFSETS:
                     return new RedisStreamConsumer<>(
                             converter,
-                            new String[] {streamKey},
-                            new StreamEntryID[] {streamEntryId},
+                            Arrays.asList(streamKey),
+                            Arrays.asList(streamEntryId),
                             config);
                 default:
                     return new RedisStreamConsumer<>(config, startupMode, converter, streamKey);

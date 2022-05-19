@@ -18,16 +18,19 @@
 package org.apache.flink.streaming.connectors.redis;
 
 import org.apache.flink.streaming.connectors.redis.config.StartupMode;
-
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.StreamEntry;
 import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.params.XReadGroupParams;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Properties;
 
-/** @param <T> */
+/**
+ * @param <T>
+ */
 public class RedisStreamGroupConsumer<T> extends AbstractRedisStreamConsumer<T> {
 
     private final String group;
@@ -46,7 +49,7 @@ public class RedisStreamGroupConsumer<T> extends AbstractRedisStreamConsumer<T> 
                 consumerName,
                 StartupMode.GROUP_OFFSETS,
                 dataConverter,
-                new String[] {streamKey},
+                Arrays.asList(streamKey),
                 config);
     }
 
@@ -55,7 +58,7 @@ public class RedisStreamGroupConsumer<T> extends AbstractRedisStreamConsumer<T> 
             String consumerName,
             StartupMode startupMode,
             DataConverter<T> dataConverter,
-            String[] streamKeys,
+            List<String> streamKeys,
             Properties config) {
         super(startupMode, streamKeys, config);
         this.group = groupName;
@@ -67,21 +70,8 @@ public class RedisStreamGroupConsumer<T> extends AbstractRedisStreamConsumer<T> 
             String groupName,
             String consumerName,
             DataConverter<T> dataConverter,
-            String[] streamKeys,
-            Long[] timestamps,
-            Properties config) {
-        super(streamKeys, timestamps, config);
-        this.group = groupName;
-        this.consumer = consumerName;
-        this.dataConverter = dataConverter;
-    }
-
-    public RedisStreamGroupConsumer(
-            String groupName,
-            String consumerName,
-            DataConverter<T> dataConverter,
-            String[] streamKeys,
-            StreamEntryID[] streamIds,
+            List<String> streamKeys,
+            List<StreamEntryID> streamIds,
             Properties config) {
         super(streamKeys, streamIds, config);
         this.group = groupName;
@@ -91,7 +81,12 @@ public class RedisStreamGroupConsumer<T> extends AbstractRedisStreamConsumer<T> 
 
     @Override
     protected List<Entry<String, List<StreamEntry>>> read(Jedis jedis) {
-        return jedis.xreadGroup(group, consumer, 1, 0L, true, streamEntryIds);
+        return jedis.xreadGroup(
+                group,
+                consumer,
+                // XReadGroupParams.xReadGroupParams().count(1).block(0).noAck(),
+                XReadGroupParams.xReadGroupParams().count(1).noAck(),
+                streamEntryIds);
     }
 
     @Override

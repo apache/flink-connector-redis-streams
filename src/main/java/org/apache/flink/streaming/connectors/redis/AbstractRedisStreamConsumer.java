@@ -18,28 +18,27 @@
 package org.apache.flink.streaming.connectors.redis;
 
 import org.apache.flink.streaming.connectors.redis.config.StartupMode;
-
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.StreamEntry;
 import redis.clients.jedis.StreamEntryID;
 
-import java.util.AbstractMap.SimpleEntry;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
-/** @param <T> */
+/**
+ * @param <T>
+ */
 public abstract class AbstractRedisStreamConsumer<T> extends RedisConsumerBase<T> {
 
-    protected final Entry<String, StreamEntryID>[] streamEntryIds;
-    private final Map<String, Integer> keyIndex = new HashMap<>();
+    protected final Map<String, StreamEntryID> streamEntryIds;
 
     public AbstractRedisStreamConsumer(
-            StartupMode startupMode, String[] streamKeys, Properties configProps) {
-        super(Arrays.asList(streamKeys), configProps);
+            StartupMode startupMode, List<String> streamKeys, Properties configProps) {
+        super(streamKeys, configProps);
         final StreamEntryID streamEntryID;
         switch (startupMode) {
             case EARLIEST:
@@ -60,24 +59,17 @@ public abstract class AbstractRedisStreamConsumer<T> extends RedisConsumerBase<T
                 throw new IllegalStateException();
         }
         this.streamEntryIds = prepareStreamEntryIds(streamKeys, streamEntryID);
-        initializeKeyIndex();
     }
 
     public AbstractRedisStreamConsumer(
-            String[] streamKeys, Long[] timestamps, Properties configProps) {
-        this(streamKeys, streamEntryIds(timestamps), configProps);
-    }
-
-    public AbstractRedisStreamConsumer(
-            String[] streamKeys, StreamEntryID[] streamIds, Properties configProps) {
+            List<String> streamKeys, List<StreamEntryID> streamIds, Properties configProps) {
         this(prepareStreamEntryIds(streamKeys, streamIds), configProps);
     }
 
     private AbstractRedisStreamConsumer(
-            Entry<String, StreamEntryID>[] streamIds, Properties configProps) {
+            Map<String, StreamEntryID> streamIds, Properties configProps) {
         super(null, configProps);
         this.streamEntryIds = streamIds;
-        initializeKeyIndex();
     }
 
     @Override
@@ -104,44 +96,32 @@ public abstract class AbstractRedisStreamConsumer<T> extends RedisConsumerBase<T
             SourceContext<T> sourceContext, String streamKey, StreamEntry streamEntry);
 
     protected void updateIdForKey(String streamKey, StreamEntryID streamEntryID) {
-        int index = keyIndex.get(streamKey);
-        if (this.streamEntryIds[index].getValue().toString().equals(">")) {
+        if (this.streamEntryIds.get(streamKey).toString().equals(">")) {
             // skip
         } else {
-            this.streamEntryIds[index].setValue(streamEntryID);
+            this.streamEntryIds.put(streamKey, streamEntryID);
         }
     }
 
-    private void initializeKeyIndex() {
-        int index = 0;
-        for (Entry<String, StreamEntryID> streamEntryId : streamEntryIds) {
-            keyIndex.put(streamEntryId.getKey(), index++);
-        }
+    private static Map<String, StreamEntryID> prepareStreamEntryIds(
+            List<String> streamKeys, StreamEntryID streamId) {
+        Map<String, StreamEntryID> streams = new LinkedHashMap<>(streamKeys.size());
+        streamKeys.forEach(streamKey -> streams.put(streamKey, streamId));
+        return streams;
     }
 
-    private static Entry<String, StreamEntryID>[] prepareStreamEntryIds(
-            String[] streamKeys, StreamEntryID streamId) {
-        Entry<?, ?>[] streams = new Entry<?, ?>[streamKeys.length];
-        for (int i = 0; i < streamKeys.length; i++) {
-            streams[i] = new SimpleEntry<>(streamKeys[i], streamId);
+    private static Map<String, StreamEntryID> prepareStreamEntryIds(
+            List<String> streamKeys, List<StreamEntryID> streamIds) {
+        Map<String, StreamEntryID> streams = new LinkedHashMap<>(streamKeys.size());
+        for (int i = 0; i < streamKeys.size(); i++) {
+            streams.put(streamKeys.get(i), streamIds.get(i));
         }
-        return (Entry<String, StreamEntryID>[]) streams;
+        return streams;
     }
 
-    private static Entry<String, StreamEntryID>[] prepareStreamEntryIds(
-            String[] streamKeys, StreamEntryID[] streamIds) {
-        Entry<?, ?>[] streams = new Entry<?, ?>[streamKeys.length];
-        for (int i = 0; i < streamKeys.length; i++) {
-            streams[i] = new SimpleEntry<>(streamKeys[i], streamIds[i]);
-        }
-        return (Entry<String, StreamEntryID>[]) streams;
-    }
-
-    private static StreamEntryID[] streamEntryIds(Long[] timestamps) {
-        StreamEntryID[] entryIds = new StreamEntryID[timestamps.length];
-        for (int i = 0; i < timestamps.length; i++) {
-            entryIds[i] = new StreamEntryID(timestamps[i], 0L);
-        }
-        return entryIds;
+    public static List<StreamEntryID> convertToStreamEntryIDs(List<Long> timestamps) {
+        return timestamps.stream()
+                .map(ts -> new StreamEntryID(ts, 0L))
+                .collect(Collectors.toList());
     }
 }
