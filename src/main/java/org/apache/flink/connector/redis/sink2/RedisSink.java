@@ -22,10 +22,11 @@ public class RedisSink<T> implements Sink<T> {
 
     @Override
     public SinkWriter<T> createWriter(Sink.InitContext initContext) throws IOException {
-        return new RedisAsyncWriter<>(
-                JedisUtils.createJedis(config),
-                new RedisConverter<>(serializer),
-                sinkConfig,
-                initContext);
+//        return new RedisAsyncWriter<>(
+//                JedisUtils.createJedis(config),
+//                new RedisConverter<>(serializer),
+//                sinkConfig,
+//                initContext);
+        return new RedisSyncWriter<T>(JedisUtils.createConnection(config), serializer);
     }
 }

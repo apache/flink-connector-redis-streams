@@ -1,6 +1,7 @@
 package org.apache.flink.connector.redis.sink2;
 
-import redis.clients.jedis.UnifiedJedis;
+import redis.clients.jedis.commands.JedisCommands;
+import redis.clients.jedis.commands.PipelineCommands;
 
 public class StringWriteRequest implements RedisWriteRequest {
 
@@ -13,8 +14,13 @@ public class StringWriteRequest implements RedisWriteRequest {
     }
 
     @Override
-    public void write(UnifiedJedis jedis) {
+    public void write(JedisCommands jedis) {
         jedis.set(key, value);
+    }
+
+    @Override
+    public void write(PipelineCommands pipe) {
+        pipe.set(key, value);
     }
 
     @Override

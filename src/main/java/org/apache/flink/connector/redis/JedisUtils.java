@@ -17,6 +17,7 @@
 
 package org.apache.flink.connector.redis;
 
+import redis.clients.jedis.Connection;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.UnifiedJedis;
 
@@ -38,5 +39,20 @@ public class JedisUtils {
                                 Integer.toString(JedisConfigConstants.DEFAULT_REDIS_PORT)));
 
         return new UnifiedJedis(new HostAndPort(host, port));
+    }
+
+    public static Connection createConnection(Properties configProps) {
+
+        String host =
+                configProps.getProperty(
+                        JedisConfigConstants.REDIS_HOST, JedisConfigConstants.DEFAULT_REDIS_HOST);
+
+        int port =
+                Integer.parseInt(
+                        configProps.getProperty(
+                                JedisConfigConstants.REDIS_PORT,
+                                Integer.toString(JedisConfigConstants.DEFAULT_REDIS_PORT)));
+
+        return new Connection(host, port);
     }
 }

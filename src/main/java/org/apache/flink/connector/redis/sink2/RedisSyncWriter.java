@@ -1,49 +1,69 @@
 package org.apache.flink.connector.redis.sink2;
 
 import org.apache.flink.api.connector.sink2.SinkWriter;
-import redis.clients.jedis.UnifiedJedis;
+import redis.clients.jedis.Connection;
+import redis.clients.jedis.MultiNodePipelineBase;
+import redis.clients.jedis.Pipeline;
 
 import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.Queue;
 
 public class RedisSyncWriter<IN> implements SinkWriter<IN> {
 
-    private final UnifiedJedis jedis;
+    private final Connection conn;
+    private final Pipeline pipe;
+    private final MultiNodePipelineBase mpipe;
 
     private final RedisSerializer<IN> serializer;
 
-    private final boolean writeImmediate;
-
-    private final Queue<RedisWriteRequest> queue = new ArrayDeque<>();
+    public RedisSyncWriter(
+            Connection connection, RedisSerializer<IN> serializer) {
+        this.conn = connection;
+        this.pipe = new Pipeline(this.conn);
+        this.mpipe = null;
+        this.serializer = serializer;
+    }
 
     public RedisSyncWriter(
-            UnifiedJedis jedis, RedisSerializer<IN> serializer, boolean writeImmediate) {
-        this.jedis = jedis;
+            Pipeline pipe, RedisSerializer<IN> serializer) {
+        this.conn = null;
+        this.pipe = pipe;
+        this.mpipe = null;
         this.serializer = serializer;
-        this.writeImmediate = writeImmediate;
+    }
+
+    public RedisSyncWriter(
+            MultiNodePipelineBase mpipe, RedisSerializer<IN> serializer) {
+        this.conn = null;
+        this.pipe = null;
+        this.mpipe = mpipe;
+        this.serializer = serializer;
     }
 
     @Override
     public void write(IN input, Context context) throws IOException, InterruptedException {
         RedisWriteRequest request = serializer.serialize(input);
-        if (writeImmediate) {
-            request.write(jedis);
+        if (pipe != null) {
+            request.write(pipe);
         } else {
-            queue.add(request);
+            request.write(mpipe);
         }
     }
 
     @Override
     public void flush(boolean b) throws IOException, InterruptedException {
-        while (!queue.isEmpty()) {
-            RedisWriteRequest request = queue.remove();
-            request.write(jedis);
+        if (pipe != null) {
+            pipe.sync();
+        } else {
+            mpipe.sync();
         }
     }
 
     @Override
     public void close() throws Exception {
-        jedis.close();
+        if (conn != null) {
+            conn.close();
+        } else {
+            mpipe.close();
+        }
     }
 }

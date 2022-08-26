@@ -1,6 +1,7 @@
 package org.apache.flink.connector.redis.sink2;
 
-import redis.clients.jedis.UnifiedJedis;
+import redis.clients.jedis.commands.JedisCommands;
+import redis.clients.jedis.commands.PipelineCommands;
 import redis.clients.jedis.params.XAddParams;
 
 import java.util.Map;
@@ -16,8 +17,13 @@ public class StreamWriteRequest implements RedisWriteRequest {
     }
 
     @Override
-    public void write(UnifiedJedis jedis) {
+    public void write(JedisCommands jedis) {
         jedis.xadd(key, XAddParams.xAddParams(), value);
+    }
+
+    @Override
+    public void write(PipelineCommands pipe) {
+        pipe.xadd(key, XAddParams.xAddParams(), value);
     }
 
     @Override

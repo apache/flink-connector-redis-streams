@@ -39,7 +39,7 @@ public class RedisAsyncWriter<IN> extends AsyncSinkWriter<IN, RedisWriteRequest>
                 request.write(jedis);
             } catch (JedisDataException de) {
                 // not worth retrying; will fail again
-                // TODO
+                // TODO ?
             } catch (Exception e) {
                 toRetry.add(request);
             }
