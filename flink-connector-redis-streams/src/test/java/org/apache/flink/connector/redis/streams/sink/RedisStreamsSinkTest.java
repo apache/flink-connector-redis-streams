@@ -14,45 +14,52 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.connector.redis.streams.sink;
 
+import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.connector.redis.streams.sink.command.StreamRedisCommand;
+import org.apache.flink.connector.base.sink.writer.config.AsyncSinkWriterConfiguration;
 import org.apache.flink.connector.redis.streams.sink.config.JedisPoolConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RedisStreamsSinkTest extends BaseITCase {
+
     @Test
     public void testStreamCommand() throws Exception {
 
-        JedisPoolConfig jedisConfig = new JedisPoolConfig.Builder()
-                .setHost(redisHost())
-                .setPort(redisPort())
-                .build();
+        JedisPoolConfig jedisConfig =
+                new JedisPoolConfig.Builder().setHost(redisHost()).setPort(redisPort()).build();
 
-        RedisSerializer<Tuple3<String,String,String>> serializer = input -> {
-            Map<String, String> value = new HashMap<>();
-            value.put(input.f1, input.f2);
-            return StreamRedisCommand.builder()
-                    .withKey(input.f0)
-                    .withValue(value)
-                    .build();
-        };
+        RedisStreamsCommandSerializer<Tuple3<String, String, String>> serializer =
+                new TestCommandSerializer();
 
-        RedisStreamsSink<Tuple3<String,String,String>> underTest = new RedisStreamsSink<>(jedisConfig, serializer);
+        AsyncSinkWriterConfiguration asyncConfig =
+                AsyncSinkWriterConfiguration.builder()
+                        .setMaxBatchSize(5)
+                        .setMaxBatchSizeInBytes(1000)
+                        .setMaxInFlightRequests(5)
+                        .setMaxBufferedRequests(6)
+                        .setMaxTimeInBufferMS(10000)
+                        .setMaxRecordSizeInBytes(1000)
+                        .build();
 
-        List<Tuple3<String,String,String>> source = Arrays.asList(
-                Tuple3.of("one", "onekey", "onevalue"),
-                Tuple3.of("two", "firstkey", "firstvalue"),
-                Tuple3.of("two", "secontkey", "secondvalue"));
+        RedisStreamsSink<Tuple3<String, String, String>> underTest =
+                new RedisStreamsSink<>(jedisConfig, serializer, asyncConfig);
+
+        List<Tuple3<String, String, String>> source =
+                Arrays.asList(
+                        Tuple3.of("one", "onekey", "onevalue"),
+                        Tuple3.of("two", "firstkey", "firstvalue"),
+                        Tuple3.of("two", "secontkey", "secondvalue"));
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(2);
@@ -62,6 +69,22 @@ class RedisStreamsSinkTest extends BaseITCase {
         // verify results
         assertEquals(1, jedis.xlen("one"));
         assertEquals(2, jedis.xlen("two"));
+    }
 
+    public static class TestCommandSerializer
+            implements RedisStreamsCommandSerializer<Tuple3<String, String, String>> {
+        @Override
+        public RedisStreamsCommand apply(
+                Tuple3<String, String, String> input, SinkWriter.Context context) {
+            return RedisStreamsCommand.builder()
+                    .withKey(input.f0)
+                    .withValue(
+                            new HashMap<String, String>() {
+                                {
+                                    put(input.f1, input.f2);
+                                }
+                            })
+                    .build();
+        }
     }
 }

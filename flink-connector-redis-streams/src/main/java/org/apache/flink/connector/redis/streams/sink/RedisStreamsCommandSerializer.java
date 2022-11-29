@@ -14,19 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.connector.redis.streams.sink;
 
-import org.apache.flink.api.common.functions.Function;
-import org.apache.flink.connector.redis.streams.sink.command.RedisCommand;
-
-import java.io.Serializable;
+import org.apache.flink.connector.base.sink.writer.ElementConverter;
 
 /**
  * Function that creates the description how the input data should be mapped to redis type.
  *
  * @param <T> The type of the element handled by this {@code RedisSerializer}
  */
-public interface RedisSerializer<T> extends Function, Serializable {
-
-    RedisCommand getMessage(T input);
-}
+public interface RedisStreamsCommandSerializer<T>
+        extends ElementConverter<T, RedisStreamsCommand> {}

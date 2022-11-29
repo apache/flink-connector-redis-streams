@@ -14,30 +14,72 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.connector.redis.streams.sink;
 
-import org.apache.flink.api.connector.sink2.Sink;
-import org.apache.flink.api.connector.sink2.SinkWriter;
+import org.apache.flink.connector.base.sink.AsyncSinkBase;
+import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
+import org.apache.flink.connector.base.sink.writer.config.AsyncSinkWriterConfiguration;
 import org.apache.flink.connector.redis.streams.sink.config.JedisConfig;
 import org.apache.flink.connector.redis.streams.sink.connection.JedisConnector;
 import org.apache.flink.connector.redis.streams.sink.connection.JedisConnectorBuilder;
+import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 
-public class RedisStreamsSink<T> implements Sink<T> {
+/**
+ * A sink for publishing data into Redis.
+ *
+ * @param <T>
+ */
+public class RedisStreamsSink<T> extends AsyncSinkBase<T, RedisStreamsCommand> {
 
     private final JedisConfig jedisConfig;
-    private final RedisSerializer<T> serializer;
 
-    public RedisStreamsSink(JedisConfig jedisConfig, RedisSerializer<T> serializer) {
+    public RedisStreamsSink(
+            JedisConfig jedisConfig,
+            RedisStreamsCommandSerializer<T> converter,
+            AsyncSinkWriterConfiguration asyncConfig) {
+        super(
+                converter,
+                asyncConfig.getMaxBatchSize(),
+                asyncConfig.getMaxInFlightRequests(),
+                asyncConfig.getMaxBufferedRequests(),
+                asyncConfig.getMaxBatchSizeInBytes(),
+                asyncConfig.getMaxTimeInBufferMS(),
+                asyncConfig.getMaxRecordSizeInBytes());
         this.jedisConfig = jedisConfig;
-        this.serializer = serializer;
     }
 
     @Override
-    public SinkWriter<T> createWriter(InitContext initContext) throws IOException {
-        JedisConnector connection = JedisConnectorBuilder.build(jedisConfig);
-        return new RedisStreamsWriter<>(connection, this.serializer);
+    public RedisStreamsWriter<T> createWriter(InitContext initContext) throws IOException {
+        return restoreWriter(initContext, Collections.emptyList());
     }
 
+    @Override
+    public RedisStreamsWriter<T> restoreWriter(
+            InitContext initContext,
+            Collection<BufferedRequestState<RedisStreamsCommand>> recoveredState)
+            throws IOException {
+        AsyncSinkWriterConfiguration asyncConfig =
+                AsyncSinkWriterConfiguration.builder()
+                        .setMaxBatchSize(getMaxBatchSize())
+                        .setMaxBatchSizeInBytes(getMaxBatchSizeInBytes())
+                        .setMaxInFlightRequests(getMaxInFlightRequests())
+                        .setMaxBufferedRequests(getMaxBufferedRequests())
+                        .setMaxTimeInBufferMS(getMaxTimeInBufferMS())
+                        .setMaxRecordSizeInBytes(getMaxRecordSizeInBytes())
+                        .build();
+        JedisConnector connection = JedisConnectorBuilder.build(jedisConfig);
+        return new RedisStreamsWriter<>(
+                connection, getElementConverter(), asyncConfig, initContext, recoveredState);
+    }
+
+    @Override
+    public SimpleVersionedSerializer<BufferedRequestState<RedisStreamsCommand>>
+            getWriterStateSerializer() {
+        return new RedisStreamsStateSerializer();
+    }
 }

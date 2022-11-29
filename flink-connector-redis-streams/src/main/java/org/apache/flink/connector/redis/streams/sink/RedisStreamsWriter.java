@@ -14,48 +14,50 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.connector.redis.streams.sink;
 
-import org.apache.flink.api.connector.sink2.SinkWriter;
-import org.apache.flink.connector.redis.streams.sink.command.RedisCommand;
+import org.apache.flink.api.connector.sink2.Sink;
+import org.apache.flink.connector.base.sink.writer.AsyncSinkWriter;
+import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
+import org.apache.flink.connector.base.sink.writer.ElementConverter;
+import org.apache.flink.connector.base.sink.writer.config.AsyncSinkWriterConfiguration;
 import org.apache.flink.connector.redis.streams.sink.connection.JedisConnector;
 
-import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.Queue;
+import java.util.Collection;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
-public class RedisStreamsWriter<T> implements SinkWriter<T> {
+class RedisStreamsWriter<T> extends AsyncSinkWriter<T, RedisStreamsCommand> {
 
     private final JedisConnector jedisConnector;
-    private final RedisSerializer<T> serializer;
-    private final Queue<RedisCommand> queue = new ArrayDeque<>();
 
-    public RedisStreamsWriter(JedisConnector jedisConnector, RedisSerializer<T> serializer) {
+    public RedisStreamsWriter(
+            JedisConnector jedisConnector,
+            ElementConverter<T, RedisStreamsCommand> elementConverter,
+            AsyncSinkWriterConfiguration asyncConfig,
+            Sink.InitContext initContext,
+            Collection<BufferedRequestState<RedisStreamsCommand>> recoveredState) {
+        super(elementConverter, initContext, asyncConfig, recoveredState);
         this.jedisConnector = jedisConnector;
-        this.serializer = serializer;
-    }
-
-
-    @Override
-    public void write(T input, Context context) throws IOException, InterruptedException {
-        RedisCommand message = serializer.getMessage(input);
-        queue.add(message);
     }
 
     @Override
-    public void flush(boolean endOfInput) throws IOException, InterruptedException {
-        flush();
-    }
+    protected void submitRequestEntries(
+            List<RedisStreamsCommand> requestEntries,
+            Consumer<List<RedisStreamsCommand>> requestResult) {
+        List<RedisStreamsCommand> errors =
+                requestEntries.stream()
+                        .peek(command -> command.send(this.jedisConnector))
+                        .filter(RedisStreamsCommand::sendIncorrectly)
+                        .collect(Collectors.toList());
 
-    private void flush() {
-        while(!this.queue.isEmpty()) {
-            RedisCommand element = this.queue.remove();
-            element.send(this.jedisConnector);
-        }
+        requestResult.accept(errors);
     }
 
     @Override
-    public void close() throws Exception {
-        jedisConnector.close();
+    protected long getSizeInBytes(RedisStreamsCommand command) {
+        return command.getMessageSize();
     }
 }

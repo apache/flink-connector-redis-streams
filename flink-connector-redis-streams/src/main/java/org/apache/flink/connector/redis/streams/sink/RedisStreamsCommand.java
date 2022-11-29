@@ -14,19 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.flink.connector.redis.streams.sink.command;
 
+package org.apache.flink.connector.redis.streams.sink;
 
 import org.apache.flink.connector.redis.streams.sink.connection.JedisConnector;
+
 import redis.clients.jedis.StreamEntryID;
 
+import java.io.Serializable;
 import java.util.Map;
 
-public class StreamRedisCommand implements RedisCommand {
+/** A Redis Streams Command. */
+public class RedisStreamsCommand implements Serializable {
+
+    private transient StreamEntryID streamId = null;
     public final String key;
     public final Map<String, String> value;
 
-    private StreamRedisCommand(String key, Map<String, String> value) {
+    private RedisStreamsCommand(String key, Map<String, String> value) {
         this.key = key;
         this.value = value;
     }
@@ -35,11 +40,33 @@ public class StreamRedisCommand implements RedisCommand {
         return new Builder();
     }
 
-    @Override
     public void send(JedisConnector connector) {
-        connector.getJedisCommands().xadd(key, StreamEntryID.NEW_ENTRY, value);
+        this.streamId =
+                connector
+                        .getJedisCommands()
+                        .xadd(
+                                key,
+                                (this.streamId != null) ? this.streamId : StreamEntryID.NEW_ENTRY,
+                                value);
     }
 
+    public boolean sendCorrectly() {
+        return true;
+    }
+
+    public boolean sendIncorrectly() {
+        return !sendCorrectly();
+    }
+
+    public long getMessageSize() {
+        return this.key.length()
+                + this.value.entrySet().stream()
+                        .map(k -> k.getKey().length() + k.getValue().length())
+                        .reduce(Integer::sum)
+                        .orElse(0);
+    }
+
+    /** The builder for {@link RedisStreamsCommand}. */
     public static class Builder {
         private String key;
         private Map<String, String> value;
@@ -54,8 +81,8 @@ public class StreamRedisCommand implements RedisCommand {
             return this;
         }
 
-        public StreamRedisCommand build() {
-            return new StreamRedisCommand(key, value);
+        public RedisStreamsCommand build() {
+            return new RedisStreamsCommand(key, value);
         }
     }
 }
