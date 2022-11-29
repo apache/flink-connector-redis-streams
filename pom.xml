@@ -43,6 +43,10 @@ under the License.
         </developerConnection>
     </scm>
 
+    <modules>
+        <module>flink-connector-redis-streams</module>
+    </modules>
+
     <properties>
         <flink.version>1.16.0</flink.version>
         <flink.shaded.version>15.0</flink.shaded.version>
