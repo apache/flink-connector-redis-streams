@@ -16,33 +16,18 @@
 # limitations under the License.
 ################################################################################
 
-name: Build flink-connector-redis
-on: [push, pull_request]
+name: Nightly
+on:
+  schedule:
+    - cron: "0 0 * * 0"
 jobs:
   compile_and_test:
-    runs-on: ubuntu-latest
+    if: github.repository_owner == 'apache'
     strategy:
       matrix:
-        jdk: [8, 11]
-    env:
-      MVN_CONNECTION_OPTIONS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
-    steps:
-      - run: echo "Running CI pipeline for JDK version ${{ matrix.jdk }}"
-
-      - name: Check out repository code
-        uses: actions/checkout@v2
-
-      - name: Set JDK
-        uses: actions/setup-java@v2
-        with:
-          java-version: ${{ matrix.jdk }}
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Set Maven 3.8.5
-        uses: stCarolas/setup-maven@v4.2
-        with:
-          maven-version: 3.8.5
-
-      - name: Compile and test flink-connector-redis
-        run: mvn clean install -Dscala-2.12 -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }}
+        flink: [1.16-SNAPSHOT, 1.17-SNAPSHOT]
+    uses: apache/flink-connector-shared-utils/.github/workflows/ci.yml@ci_utils
+    with:
+      flink_version: ${{ matrix.flink }}
+      flink_url: https://s3.amazonaws.com/flink-nightly/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
+      cache_flink_binary: false
