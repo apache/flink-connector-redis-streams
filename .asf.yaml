@@ -1,15 +1,21 @@
 github:
+  description: "Apache Flink Redis Streams Connector"
+  homepage: https://flink.apache.org/
+  labels:
+    - flink
+    - redis
+    - streams
+    - connector
+    - big-data
+    - java
+    - real-time
+    - datastream
+    - table
+    - sql
   enabled_merge_buttons:
     squash: true
     merge: false
     rebase: true
-  labels:
-    - flink
-    - redis
-    - connector
-    - datastream
-    - table
-    - sql
   autolink_jira: FLINK
   collaborators:
     - flinkbot
